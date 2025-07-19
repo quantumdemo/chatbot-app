@@ -550,6 +550,17 @@
                 "I was made in 2022, if that's what you are asking!",
                 "My birthday was on 29th of November"
             ]
+        },
+        {
+            "tag": "agent",
+            "patterns": [
+                "agent",
+                "human",
+                "support"
+            ],
+            "responses": [
+                "Please wait while I connect you to a human agent."
+            ]
         }
     ]
 }
