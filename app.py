@@ -57,10 +57,47 @@ def getResponse(ints, intents_json):
             break
     return result
 
-def chatbot_response(msg):
-    ints = predict_class(msg, model)
-    res = getResponse(ints, intents)
-    return res
+import database
+database.create_tables()
+user_sessions = {}
+
+def chatbot_response(msg, user_id="default_user"):
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {"name": None, "email": None, "inquiry_type": None, "state": "new_user"}
+
+    session = user_sessions[user_id]
+    response = ""
+
+    if session["state"] == "new_user":
+        session["state"] = "collecting_name"
+        response = "Hello! What is your name?"
+    elif session["state"] == "collecting_name":
+        session["name"] = msg
+        session["state"] = "collecting_email"
+        response = f"Nice to meet you, {msg}! What is your email address?"
+    elif session["state"] == "collecting_email":
+        session["email"] = msg
+        session["state"] = "collecting_inquiry_buttons"
+        response = "What type of inquiry do you have?"
+    elif session["state"] == "collecting_inquiry":
+        session["inquiry_type"] = msg
+        session["state"] = "chatting"
+        response = "Thank you! How can I help you today?"
+    elif session["state"] == "collecting_inquiry_buttons":
+        buttons = [
+            {"type": "reply", "reply": {"id": "pricing", "title": "Pricing"}},
+            {"type": "reply", "reply": {"id": "support", "title": "Support"}},
+            {"type": "reply", "reply": {"id": "other", "title": "Other"}},
+        ]
+        from whatsapp_handler import send_whatsapp_message_with_buttons
+        send_whatsapp_message_with_buttons(user_id, "Please select an inquiry type:", buttons)
+        return ""
+    else:
+        ints = predict_class(msg, model)
+        response = getResponse(ints, intents)
+
+    database.save_interaction(user_id, msg, response)
+    return response
 
 
 from flask import Flask, render_template, request
@@ -75,8 +112,19 @@ def home():
 @app.route("/get")
 def get_bot_response():
     userText = request.args.get('msg')
-    return chatbot_response(userText)
+    return chatbot_response(userText, "web_user")
 
 
 if __name__ == "__main__":
     app.run()
+
+import whatsapp_handler
+
+@app.route("/whatsapp", methods=['GET', 'POST'])
+def whatsapp_webhook():
+    if request.method == 'GET':
+        # WhatsApp verification
+        if request.args.get('hub.verify_token') == 'YOUR_VERIFY_TOKEN':
+            return request.args.get('hub.challenge')
+        return 'Error, wrong validation token'
+    return whatsapp_handler.handle_whatsapp_message(request)
